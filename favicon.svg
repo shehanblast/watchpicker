@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Background circle -->
+  <circle cx="96" cy="96" r="90" fill="#1a1a25" stroke="#7c4dff" stroke-width="4"/>
+  
+  <!-- Play button (primary) -->
+  <polygon points="130,96 70,65 70,127" fill="#e040fb"/>
+  
+  <!-- Accent glow -->
+  <circle cx="96" cy="96" r="95" fill="none" stroke="#7c4dff" stroke-width="2" opacity="0.3"/>
+</svg>
