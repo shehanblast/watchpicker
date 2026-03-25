@@ -4,6 +4,8 @@
 
 A minimal, browser-based app that randomly picks a movie or TV series from your personal watchlist — so you stop wasting time deciding and start actually watching.
 
+![watchpicker interface](watchpicker-website-mockup.png)
+
 ## ✨ Features
 
 - **Split lists** — separate libraries for Movies and TV Series
