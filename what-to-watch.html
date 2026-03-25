@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>What Should I Watch?</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --purple: #7c4dff;
+      --pink:   #e040fb;
+      --bg:     #08080f;
+      --border: rgba(255,255,255,0.07);
+      --text:   #f0f0f0;
+      --muted:  #555;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    #bg-canvas {
+      position: fixed; inset: 0;
+      z-index: 0; pointer-events: none;
+    }
+
+    /* ────────────── HERO ────────────── */
+    .hero {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 24px; text-align: center;
+    }
+
+    .hero-eyebrow {
+      font-size: 0.72rem; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.4rem, 7vw, 5rem);
+      font-weight: 800; letter-spacing: -1.5px; line-height: 1.05;
+      background: linear-gradient(135deg, #fff 0%, #c4b5ff 50%, #f48eff 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+
+    .hero-sub {
+      font-size: clamp(0.95rem, 2vw, 1.15rem);
+      color: #666; margin-bottom: 48px; max-width: 340px;
+    }
+
+    /* ────────────── RESULT CARD ────────────── */
+    .result-card {
+      position: relative; overflow: hidden;
+      width: 100%; max-width: 480px; min-height: 160px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border); border-radius: 24px;
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 28px; margin-bottom: 28px;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .result-card.has-result {
+      border-color: rgba(124,77,255,0.45);
+      box-shadow: 0 0 30px rgba(124,77,255,0.12);
+    }
+
+    /* ── Mood picker state ── */
+    .result-card.choosing {
+      border-color: rgba(255,255,255,0.12);
+      min-height: 200px;
+    }
+
+    .mood-question {
+      font-size: 0.75rem; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 20px;
+      animation: fadeUp 0.35s ease both;
+    }
+
+    .mood-btns {
+      display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+      animation: fadeUp 0.4s 0.08s ease both;
+    }
+
+    .mood-btn {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+      padding: 18px 28px; border-radius: 18px; border: none; cursor: pointer;
+      font-weight: 700; font-size: 0.9rem; letter-spacing: 0.2px;
+      transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+      min-width: 130px;
+    }
+
+    .mood-btn:hover  { transform: translateY(-3px); }
+    .mood-btn:active { transform: scale(0.96); }
+
+    .mood-btn .mood-icon { font-size: 2rem; line-height: 1; }
+
+    .mood-btn.movie {
+      background: linear-gradient(135deg, rgba(124,77,255,0.25), rgba(124,77,255,0.1));
+      border: 1px solid rgba(124,77,255,0.4); color: #c4b5ff;
+      box-shadow: 0 4px 20px rgba(124,77,255,0.1);
+    }
+    .mood-btn.movie:hover  { box-shadow: 0 8px 30px rgba(124,77,255,0.3); }
+
+    .mood-btn.series {
+      background: linear-gradient(135deg, rgba(224,64,251,0.25), rgba(224,64,251,0.1));
+      border: 1px solid rgba(224,64,251,0.4); color: #f5b0ff;
+      box-shadow: 0 4px 20px rgba(224,64,251,0.1);
+    }
+    .mood-btn.series:hover { box-shadow: 0 8px 30px rgba(224,64,251,0.3); }
+
+    .mood-empty-msg {
+      font-size: 0.85rem; color: #444; text-align: center;
+      animation: fadeUp 0.3s ease both;
+    }
+    .mood-empty-msg a { color: #9d6fff; cursor: pointer; text-decoration: underline; }
+
+    /* ── Rolling state ── */
+    .result-card.rolling {
+      border-color: rgba(124,77,255,0.55);
+      box-shadow: 0 0 40px rgba(124,77,255,0.18);
+    }
+
+    .result-card.rolling::after {
+      content: ''; position: absolute; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, rgba(180,120,255,0.9) 50%, transparent 100%);
+      animation: scanLine 0.45s linear infinite; pointer-events: none;
+    }
+
+    @keyframes scanLine { 0% { top: 5%; } 100% { top: 95%; } }
+
+    .rolling-label {
+      font-size: 0.68rem; letter-spacing: 3px; text-transform: uppercase;
+      color: #9d6fff; margin-bottom: 12px;
+      animation: blinkLabel 0.5s ease-in-out infinite;
+    }
+
+    @keyframes blinkLabel { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+    .rolling-title {
+      font-size: clamp(1.2rem, 3.5vw, 1.85rem); font-weight: 700;
+      text-align: center; line-height: 1.2;
+      color: rgba(255,255,255,0.75); filter: blur(0.5px);
+      animation: flickerText 0.1s steps(1) infinite;
+    }
+
+    @keyframes flickerText { 0%,60% { opacity: 1; } 61%,100% { opacity: 0.65; } }
+
+    /* ── Result reveal ── */
+    @keyframes revealCard {
+      0%   { transform: scale(0.91) translateY(8px); opacity: 0; box-shadow: 0 0 0 rgba(124,77,255,0); }
+      45%  { transform: scale(1.03) translateY(-2px); opacity: 1; box-shadow: 0 0 70px rgba(160,90,255,0.55); }
+      100% { transform: scale(1) translateY(0); opacity: 1; box-shadow: 0 0 28px rgba(124,77,255,0.18); }
+    }
+
+    .result-card.reveal { animation: revealCard 0.65s cubic-bezier(0.22,1,0.36,1) forwards; }
+    .result-card.reveal .result-eyebrow { animation: fadeUp 0.4s 0.1s ease both; }
+    .result-card.reveal .result-title   { animation: fadeUp 0.5s 0.18s cubic-bezier(0.34,1.5,0.64,1) both; }
+    .result-card.reveal .result-badge   { animation: fadeUp 0.4s 0.32s ease both; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-eyebrow {
+      font-size: 0.68rem; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px;
+    }
+
+    .result-title {
+      font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700;
+      line-height: 1.2; text-align: center; color: #fff;
+    }
+
+    .result-badge {
+      margin-top: 12px; font-size: 0.75rem; font-weight: 600;
+      letter-spacing: 0.5px; padding: 4px 14px; border-radius: 99px;
+    }
+
+    .result-badge.movie  { background: rgba(124,77,255,0.2); color: #b39dff; }
+    .result-badge.series { background: rgba(224,64,251,0.2); color: #f48eff; }
+
+    .placeholder-text { font-size: 0.95rem; color: #333; }
+
+    /* ────────────── PICK BUTTON ────────────── */
+    .pick-btn {
+      position: relative; overflow: hidden;
+      padding: 18px 48px; font-size: 1.05rem; font-weight: 700;
+      letter-spacing: 0.2px; border: none; border-radius: 99px;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      color: #fff; transition: transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 0 40px rgba(124,77,255,0.35); margin-bottom: 28px;
+    }
+
+    .pick-btn:hover  { transform: translateY(-2px); box-shadow: 0 6px 50px rgba(124,77,255,0.5); }
+    .pick-btn:active { transform: scale(0.97); }
+    .pick-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .pick-btn .btn-inner { display: inline-flex; align-items: center; gap: 10px; }
+
+    .btn-spinner {
+      display: inline-block; width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.25); border-top-color: #fff;
+      border-radius: 50%; animation: spinRing 0.65s linear infinite; flex-shrink: 0;
+    }
+
+    @keyframes spinRing { to { transform: rotate(360deg); } }
+
+    .pick-btn.deciding {
+      background: linear-gradient(135deg, #5c35cc, #b030d0);
+      box-shadow: 0 0 28px rgba(100,60,200,0.4);
+    }
+
+    .pick-btn.deciding::after {
+      content: ''; position: absolute;
+      top: 0; left: -60%; width: 50%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+      animation: shimmer 1s linear infinite;
+    }
+
+    @keyframes shimmer { to { left: 110%; } }
+
+    /* ────────────── GHOST ACTIONS ────────────── */
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    .ghost-btn {
+      padding: 10px 22px; font-size: 0.85rem; font-weight: 600;
+      border-radius: 99px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04); color: #aaa; cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+
+    .ghost-btn:hover { background: rgba(255,255,255,0.09); color: #fff; border-color: rgba(255,255,255,0.18); }
+
+    /* ────────────── HISTORY ────────────── */
+    .history-section {
+      position: relative; z-index: 1;
+      padding: 60px 24px 80px; max-width: 700px; margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 24px;
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .history-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .history-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+      border-radius: 14px; animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .history-num  { font-size: 0.7rem; color: #333; font-weight: 600; min-width: 20px; text-align: right; }
+    .history-name { flex: 1; font-size: 0.95rem; color: #d0d0d0; }
+
+    .history-badge { font-size: 0.68rem; font-weight: 600; padding: 2px 10px; border-radius: 99px; }
+    .history-badge.movie  { background: rgba(124,77,255,0.15); color: #9d80ff; }
+    .history-badge.series { background: rgba(224,64,251,0.15); color: #e88eff; }
+
+    .history-date { font-size: 0.72rem; color: #444; white-space: nowrap; }
+    .history-empty { text-align: center; color: #333; font-size: 0.9rem; padding: 32px 0; }
+
+    .clear-history-btn {
+      background: none; border: none; color: #444;
+      font-size: 0.75rem; cursor: pointer; padding: 0;
+      transition: color 0.2s;
+    }
+    .clear-history-btn:hover { color: #ff5252; }
+
+    /* ────────────── FOOTER ────────────── */
+    .site-footer {
+      position: relative; z-index: 1;
+      padding: 28px 24px 36px; text-align: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-text {
+      font-size: 0.78rem; color: #888;
+      display: inline-flex; align-items: center; gap: 7px;
+      letter-spacing: 0.2px;
+    }
+
+    .footer-name { color: #ccc; font-weight: 600; }
+    .footer-heart { color: #9d6fff; font-size: 0.9rem; }
+
+    .footer-claude {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(124,77,255,0.1); border: 1px solid rgba(124,77,255,0.2);
+      border-radius: 99px; padding: 3px 10px 3px 7px;
+      font-size: 0.72rem; font-weight: 600; color: #9d7fff;
+      transition: background 0.2s, border-color 0.2s;
+      text-decoration: none; cursor: default;
+    }
+
+    .footer-claude:hover {
+      background: rgba(124,77,255,0.18); border-color: rgba(124,77,255,0.4);
+    }
+
+    .claude-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      flex-shrink: 0;
+    }
+
+    /* ────────────── MODALS ────────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; opacity: 0; pointer-events: none;
+      transition: opacity 0.25s;
+    }
+
+    .modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: #13131f; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px; width: 100%; max-width: 520px; max-height: 85vh;
+      display: flex; flex-direction: column;
+      transform: translateY(20px) scale(0.97);
+      transition: transform 0.3s cubic-bezier(0.34,1.4,0.64,1), opacity 0.25s;
+      opacity: 0;
+    }
+
+    .modal-backdrop.open .modal { transform: translateY(0) scale(1); opacity: 1; }
+
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 24px 0;
+    }
+
+    .modal-title { font-size: 1.05rem; font-weight: 700; color: #fff; }
+
+    .modal-close {
+      background: rgba(255,255,255,0.06); border: none; color: #aaa; cursor: pointer;
+      width: 32px; height: 32px; border-radius: 99px; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .modal-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+    .modal-body { padding: 20px 24px 24px; overflow-y: auto; flex: 1; }
+    .modal-body::-webkit-scrollbar { width: 4px; }
+    .modal-body::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 99px; }
+
+    /* ── Library tabs ── */
+    .lib-tabs {
+      display: flex; gap: 0; margin-bottom: 18px;
+      background: rgba(255,255,255,0.04); border-radius: 12px; padding: 4px;
+    }
+
+    .lib-tab {
+      flex: 1; padding: 9px 0; font-size: 0.85rem; font-weight: 600;
+      border: none; background: none; color: #666; cursor: pointer;
+      border-radius: 9px; transition: background 0.2s, color 0.2s;
+    }
+
+    .lib-tab.active {
+      background: rgba(255,255,255,0.09); color: #fff;
+    }
+
+    .lib-tab .tab-count {
+      display: inline-block; margin-left: 6px;
+      font-size: 0.68rem; font-weight: 700;
+      background: rgba(255,255,255,0.1); color: #888;
+      padding: 1px 7px; border-radius: 99px;
+    }
+
+    .lib-tab.active .tab-count { background: rgba(124,77,255,0.3); color: #c4b5ff; }
+
+    .lib-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .lib-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 14px;
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      border-radius: 12px; animation: slideUp 0.2s ease;
+    }
+
+    .lib-name { flex: 1; font-size: 0.9rem; color: #d8d8d8; }
+
+    .lib-remove {
+      background: none; border: none; color: #444; cursor: pointer;
+      font-size: 0.9rem; padding: 3px 5px; border-radius: 6px;
+      transition: color 0.2s, background 0.2s; line-height: 1;
+    }
+    .lib-remove:hover { color: #ff5252; background: rgba(255,82,82,0.12); }
+    .lib-empty { text-align: center; color: #333; font-size: 0.88rem; padding: 24px 0; }
+
+    /* ── Add modal ── */
+    .add-form { display: flex; flex-direction: column; gap: 16px; }
+
+    .type-toggle {
+      display: flex; gap: 10px;
+    }
+
+    .type-toggle-btn {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+      padding: 16px 10px; border-radius: 14px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03); color: #777;
+      cursor: pointer; font-weight: 600; font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .type-toggle-btn .t-icon { font-size: 1.5rem; }
+
+    .type-toggle-btn.active.movie {
+      border-color: rgba(124,77,255,0.6); color: #c4b5ff;
+      background: rgba(124,77,255,0.12);
+      box-shadow: 0 0 16px rgba(124,77,255,0.15);
+    }
+
+    .type-toggle-btn.active.series {
+      border-color: rgba(224,64,251,0.6); color: #f5b0ff;
+      background: rgba(224,64,251,0.12);
+      box-shadow: 0 0 16px rgba(224,64,251,0.15);
+    }
+
+    .form-input {
+      width: 100%; padding: 13px 16px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text); font-size: 0.95rem;
+      outline: none; transition: border-color 0.2s;
+    }
+
+    .form-input::placeholder { color: #444; }
+    .form-input:focus { border-color: var(--purple); }
+
+    .form-submit {
+      width: 100%; padding: 13px;
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      border: none; border-radius: 12px; color: #fff;
+      font-size: 0.95rem; font-weight: 700; cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .form-submit:hover { opacity: 0.85; }
+
+    /* ────────────── POST-PICK ACTIONS ────────────── */
+    .pick-actions {
+      width: 100%; max-width: 480px;
+      margin-bottom: 20px;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      pointer-events: none;
+    }
+
+    .pick-actions.show {
+      opacity: 1; transform: translateY(0); pointer-events: all;
+    }
+
+    /* preference prompt (first time only) */
+    .pref-prompt {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px; padding: 20px 22px; text-align: center;
+    }
+
+    .pref-prompt-label {
+      font-size: 0.7rem; letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 8px; display: block;
+    }
+
+    .pref-prompt-title {
+      font-size: 0.95rem; font-weight: 700; color: #ddd;
+      margin-bottom: 4px;
+    }
+
+    .pref-prompt-sub {
+      font-size: 0.78rem; color: #555; margin-bottom: 18px;
+    }
+
+    .pref-btns { display: flex; gap: 10px; }
+
+    .pref-btn {
+      flex: 1; padding: 12px 10px;
+      border-radius: 12px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04); color: #aaa;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; line-height: 1.4;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+    }
+
+    .pref-btn .pref-icon { font-size: 1.3rem; }
+
+    .pref-btn:hover { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.2); }
+
+    .pref-btn.auto:hover  { border-color: rgba(124,77,255,0.5); background: rgba(124,77,255,0.1); color: #c4b5ff; }
+    .pref-btn.manual:hover { border-color: rgba(224,64,251,0.5); background: rgba(224,64,251,0.1); color: #f5b0ff; }
+
+    /* action row (after pref is set) */
+    .action-row {
+      display: flex; gap: 10px;
+    }
+
+    .action-btn {
+      flex: 1; padding: 13px 16px;
+      border-radius: 14px; border: none; cursor: pointer;
+      font-size: 0.88rem; font-weight: 700;
+      transition: opacity 0.2s, transform 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+
+    .action-btn:active { transform: scale(0.97); }
+
+    /* action-btn.again kept for potential future use */
+
+    /* auto-remove toast */
+    .removed-toast {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-size: 0.8rem; color: #666; padding: 10px 0 4px;
+    }
+    .removed-toast .toast-check { color: #7c4dff; font-size: 1rem; }
+
+    /* ────────────── WELCOME MODAL ────────────── */
+    .welcome-modal {
+      max-width: 460px;
+    }
+
+    .welcome-icon {
+      font-size: 2.8rem; line-height: 1;
+      margin-bottom: 16px; display: block;
+      animation: fadeUp 0.5s 0.1s ease both;
+    }
+
+    .welcome-title {
+      font-size: 1.25rem; font-weight: 800; color: #fff;
+      margin-bottom: 8px; letter-spacing: -0.3px;
+      animation: fadeUp 0.5s 0.15s ease both;
+    }
+
+    .welcome-desc {
+      font-size: 0.88rem; color: #888; line-height: 1.65;
+      margin-bottom: 22px;
+      animation: fadeUp 0.4s 0.2s ease both;
+    }
+
+    .welcome-cards {
+      display: flex; flex-direction: column; gap: 10px;
+      margin-bottom: 24px;
+      animation: fadeUp 0.4s 0.25s ease both;
+    }
+
+    .welcome-card {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 13px 16px;
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+
+    .welcome-card-icon {
+      font-size: 1.2rem; line-height: 1; flex-shrink: 0; margin-top: 1px;
+    }
+
+    .welcome-card-body { display: flex; flex-direction: column; gap: 3px; }
+
+    .welcome-card-title {
+      font-size: 0.82rem; font-weight: 700; color: #ccc;
+    }
+
+    .welcome-card-text {
+      font-size: 0.78rem; color: #666; line-height: 1.5;
+    }
+
+    .welcome-card-text strong { color: #999; font-weight: 600; }
+
+    .welcome-card.warn {
+      border-color: rgba(255,180,0,0.15);
+      background: rgba(255,180,0,0.04);
+    }
+
+    .welcome-card.warn .welcome-card-title { color: #c8a400; }
+
+    .welcome-got-it {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      border: none; border-radius: 14px; color: #fff;
+      font-size: 0.95rem; font-weight: 700; cursor: pointer;
+      transition: opacity 0.2s;
+      animation: fadeUp 0.4s 0.3s ease both;
+    }
+
+    .welcome-got-it:hover { opacity: 0.88; }
+  </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<!-- ══════ HERO ══════ -->
+<section class="hero">
+  <p class="hero-eyebrow">Your personal oracle</p>
+  <h1>What Should<br/>I Watch?</h1>
+  <p class="hero-sub">Stop scrolling. Let fate decide.</p>
+
+  <div class="result-card" id="resultCard">
+    <span class="placeholder-text">Press the button and find out.</span>
+  </div>
+
+  <div class="pick-actions" id="pickActions"></div>
+
+  <button class="pick-btn" id="pickBtn" onclick="pickRandom()">
+    <span class="btn-inner">🎲 Pick Something For Me</span>
+  </button>
+
+  <div class="hero-actions">
+    <button class="ghost-btn" onclick="openModal('library')">📚 My Library</button>
+    <button class="ghost-btn" onclick="openModal('add')">＋ Add Title</button>
+    <button class="ghost-btn" id="prefToggleBtn" onclick="openModal('prefs')" title="Removal preference">⚙ Preferences</button>
+  </div>
+</section>
+
+<!-- ══════ HISTORY ══════ -->
+<section class="history-section" id="historySection" style="display:none">
+  <p class="section-label">
+    Previously picked
+    <button class="clear-history-btn" id="clearHistBtn" onclick="clearHistory()">Clear all</button>
+  </p>
+  <div id="historyList" class="history-list"></div>
+</section>
+
+<!-- ══════ LIBRARY MODAL ══════ -->
+<div class="modal-backdrop" id="libraryModal" onclick="backdropClose(event,'libraryModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">📚 My Library</span>
+      <button class="modal-close" onclick="closeModal('libraryModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="lib-tabs">
+        <button class="lib-tab active" id="tabMovies" onclick="switchTab('movie')">
+          🎬 Movies <span class="tab-count" id="movieCount">0</span>
+        </button>
+        <button class="lib-tab" id="tabSeries" onclick="switchTab('series')">
+          📺 TV Series <span class="tab-count" id="seriesCount">0</span>
+        </button>
+      </div>
+      <div class="lib-list" id="libList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ ADD MODAL ══════ -->
+<div class="modal-backdrop" id="addModal" onclick="backdropClose(event,'addModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">＋ Add a Title</span>
+      <button class="modal-close" onclick="closeModal('addModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="add-form">
+        <div class="type-toggle">
+          <button class="type-toggle-btn movie active" id="toggleMovie" onclick="setAddType('movie')">
+            <span class="t-icon">🎬</span> Movie
+          </button>
+          <button class="type-toggle-btn series" id="toggleSeries" onclick="setAddType('series')">
+            <span class="t-icon">📺</span> TV Series
+          </button>
+        </div>
+        <input class="form-input" id="titleInput" type="text"
+          placeholder="Enter title…"
+          onkeydown="if(event.key==='Enter') submitAdd()"/>
+        <button class="form-submit" id="addSubmitBtn" onclick="submitAdd()">Add to Library</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ PREFS MODAL ══════ -->
+<div class="modal-backdrop" id="prefsModal" onclick="backdropClose(event,'prefsModal')">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">⚙ Preferences</span>
+      <button class="modal-close" onclick="closeModal('prefsModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.8rem;color:#666;margin-bottom:16px;">
+        What should happen to a title after it's picked?
+      </p>
+      <div class="pref-btns">
+        <button class="pref-btn auto" id="prefAutoBtn" onclick="savePrefFromModal('auto')">
+          <span class="pref-icon">🗑️</span>
+          <span>Auto-remove<br/>after each pick</span>
+        </button>
+        <button class="pref-btn manual" id="prefManualBtn" onclick="savePrefFromModal('manual')">
+          <span class="pref-icon">📚</span>
+          <span>I'll manage<br/>my library</span>
+        </button>
+      </div>
+      <p id="prefCurrentLabel" style="font-size:0.75rem;color:#555;text-align:center;margin-top:14px;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ WELCOME MODAL ══════ -->
+<div class="modal-backdrop" id="welcomeModal">
+  <div class="modal welcome-modal">
+    <div class="modal-body" style="padding: 28px 28px 28px;">
+      <span class="welcome-icon">🎬</span>
+      <p class="welcome-title">Welcome to What Should I Watch?</p>
+      <p class="welcome-desc">
+        A tiny side project built to solve one very real problem — spending more time
+        picking something to watch than actually watching it. Add your backlog, hit the button,
+        and let fate decide.
+      </p>
+
+      <div class="welcome-cards">
+        <div class="welcome-card">
+          <span class="welcome-card-icon">💾</span>
+          <div class="welcome-card-body">
+            <span class="welcome-card-title">Your data lives in this browser</span>
+            <span class="welcome-card-text">
+              Your movie and TV series lists are saved in your browser's
+              <strong>local storage</strong> — nothing is sent to any server.
+            </span>
+          </div>
+        </div>
+
+        <div class="welcome-card warn">
+          <span class="welcome-card-icon">⚠️</span>
+          <div class="welcome-card-body">
+            <span class="welcome-card-title">Clearing your browser data will wipe your list</span>
+            <span class="welcome-card-text">
+              If you clear site data, cookies, or local storage — your list will be gone.
+              There's no cloud backup, so add carefully!
+            </span>
+          </div>
+        </div>
+
+        <div class="welcome-card">
+          <span class="welcome-card-icon">🖥️</span>
+          <div class="welcome-card-body">
+            <span class="welcome-card-title">Each browser has its own list</span>
+            <span class="welcome-card-text">
+              Opening this on a different browser or device will start with a fresh default list —
+              your changes <strong>don't sync</strong> across browsers.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <button class="welcome-got-it" onclick="dismissWelcome()">Got it, let's go →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ FOOTER ══════ -->
+<footer class="site-footer">
+  <span class="footer-text">
+    Built by <span class="footer-name">Binuka</span>
+    <span class="footer-heart">♥</span>
+    with
+    <span class="footer-claude">
+      <span class="claude-dot"></span>Claude
+    </span>
+  </span>
+</footer>
+
+<script>
+  /* ══════════════════════
+     DATA
+  ══════════════════════ */
+  const MOVIES_KEY  = "wtw_movies";
+  const SERIES_KEY  = "wtw_series";
+  const HISTORY_KEY = "wtw_history";
+
+  const DEFAULT_MOVIES = [
+    "Inception", "Interstellar", "Parasite",
+    "No Country for Old Men", "Everything Everywhere All at Once"
+  ].map(n => ({ name: n }));
+
+  const DEFAULT_SERIES = [
+    "The Bear", "Severance", "The Last of Us",
+    "Succession", "Dark"
+  ].map(n => ({ name: n }));
+
+  function load(key, def) {
+    try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : [...def]; }
+    catch { return [...def]; }
+  }
+  function save(key, d) { try { localStorage.setItem(key, JSON.stringify(d)); } catch {} }
+
+  let movies  = load(MOVIES_KEY,  DEFAULT_MOVIES);
+  let series  = load(SERIES_KEY,  DEFAULT_SERIES);
+  let history = load(HISTORY_KEY, []);
+
+  /* ══════════════════════
+     PICK FLOW
+  ══════════════════════ */
+  let isSpinning = false;
+
+  function pickRandom() {
+    if (isSpinning) return;
+    const hasMovies = movies.length > 0;
+    const hasSeries = series.length > 0;
+    if (!hasMovies && !hasSeries) return;
+
+    // ── If pref not yet set, ask first then continue ──
+    if (getPref() === null) {
+      showPrefPromptInCard();
+      return;
+    }
+
+    const card = document.getElementById('resultCard');
+    const btn  = document.getElementById('pickBtn');
+
+    // Clear any leftover action row
+    const actions = document.getElementById('pickActions');
+    actions.classList.remove('show');
+    actions.innerHTML = '';
+
+    // If only one type exists, skip the mood picker
+    if (hasMovies && !hasSeries) { startSpin('movie'); return; }
+    if (!hasMovies && hasSeries) { startSpin('series'); return; }
+
+    // Show mood picker
+    card.classList.remove('has-result', 'reveal', 'rolling');
+    card.classList.add('choosing');
+    card.innerHTML = `
+      <span class="mood-question">What are you in the mood for?</span>
+      <div class="mood-btns">
+        <button class="mood-btn movie" onclick="startSpin('movie')">
+          <span class="mood-icon">🎬</span>Movie
+        </button>
+        <button class="mood-btn series" onclick="startSpin('series')">
+          <span class="mood-icon">📺</span>TV Series
+        </button>
+      </div>
+    `;
+
+    btn.innerHTML = `<span class="btn-inner">↩ Never mind</span>`;
+    btn.onclick   = resetCard;
+  }
+
+  function showPrefPromptInCard() {
+    const card    = document.getElementById('resultCard');
+    const btn     = document.getElementById('pickBtn');
+    const actions = document.getElementById('pickActions');
+
+    actions.classList.remove('show');
+    actions.innerHTML = '';
+
+    card.classList.remove('has-result', 'reveal', 'rolling');
+    card.classList.add('choosing');
+    card.innerHTML = `
+      <span class="mood-question">One quick thing</span>
+      <p style="font-size:0.82rem;color:#666;margin-bottom:20px;text-align:center;line-height:1.5;">
+        What should happen to a title<br/>after it's picked?
+      </p>
+      <div class="mood-btns">
+        <button class="mood-btn movie" onclick="setPrefAndProceed('auto')" style="min-width:120px;">
+          <span class="mood-icon">🗑️</span>
+          <span style="font-size:0.8rem;line-height:1.4;">Auto-remove<br/>after each pick</span>
+        </button>
+        <button class="mood-btn series" onclick="setPrefAndProceed('manual')" style="min-width:120px;">
+          <span class="mood-icon">📚</span>
+          <span style="font-size:0.8rem;line-height:1.4;">I'll manage<br/>my library</span>
+        </button>
+      </div>
+      <p style="font-size:0.72rem;color:#444;margin-top:16px;">You can change this anytime in ⚙ Preferences</p>
+    `;
+
+    btn.innerHTML = `<span class="btn-inner">↩ Never mind</span>`;
+    btn.onclick   = resetCard;
+  }
+
+  function setPrefAndProceed(pref) {
+    setPref(pref);
+    // Restore button then run normal pick flow
+    const btn = document.getElementById('pickBtn');
+    btn.innerHTML = `<span class="btn-inner">🎲 Pick Again</span>`;
+    btn.onclick   = pickRandom;
+    pickRandom();
+  }
+
+  function resetCard() {
+    const card    = document.getElementById('resultCard');
+    const btn     = document.getElementById('pickBtn');
+    const actions = document.getElementById('pickActions');
+    card.classList.remove('choosing', 'rolling', 'has-result', 'reveal');
+    card.innerHTML   = `<span class="placeholder-text">Press the button and find out.</span>`;
+    btn.innerHTML    = `<span class="btn-inner">🎲 Pick Something For Me</span>`;
+    btn.onclick      = pickRandom;
+    actions.classList.remove('show');
+    actions.innerHTML = '';
+  }
+
+  function startSpin(type) {
+    if (isSpinning) return;
+    const list = type === 'movie' ? movies : series;
+
+    if (!list.length) {
+      const card = document.getElementById('resultCard');
+      card.innerHTML = `
+        <span class="mood-empty-msg">
+          No ${type === 'movie' ? 'movies' : 'TV series'} in your library yet.<br/>
+          <a onclick="openModal('add')">Add some titles</a> to get started.
+        </span>
+      `;
+      return;
+    }
+
+    isSpinning = true;
+    const pick    = list[Math.floor(Math.random() * list.length)];
+    const btn     = document.getElementById('pickBtn');
+    const card    = document.getElementById('resultCard');
+    const actions = document.getElementById('pickActions');
+
+    // Clear actions
+    actions.classList.remove('show');
+    actions.innerHTML = '';
+
+    // Button → deciding
+    btn.classList.add('deciding');
+    btn.disabled  = true;
+    btn.innerHTML = `<span class="btn-inner"><span class="btn-spinner"></span> Deciding…</span>`;
+    btn.onclick   = null;
+
+    // Card → rolling
+    card.classList.remove('choosing', 'has-result', 'reveal');
+    card.classList.add('rolling');
+
+    const TOTAL_MS = 2000;
+    let elapsed = 0, interval = 55;
+
+    function cycle() {
+      const decoy = list[Math.floor(Math.random() * list.length)];
+      card.innerHTML = `
+        <span class="rolling-label">Shuffling…</span>
+        <span class="rolling-title">${esc(decoy.name)}</span>
+      `;
+      elapsed += interval;
+      const progress = Math.min(elapsed / TOTAL_MS, 1);
+      interval = 55 + Math.pow(progress, 2.2) * 320;
+      if (elapsed < TOTAL_MS) { setTimeout(cycle, interval); }
+      else { revealPick(pick, type, btn, card, actions); }
+    }
+
+    cycle();
+  }
+
+  function revealPick(pick, type, btn, card, actions) {
+    card.classList.remove('rolling');
+    void card.offsetWidth;
+    card.innerHTML = `
+      <span class="result-eyebrow">Tonight you're watching</span>
+      <span class="result-title">${esc(pick.name)}</span>
+      <span class="result-badge ${type}">${type === 'movie' ? '🎬 Movie' : '📺 TV Series'}</span>
+    `;
+    card.classList.add('has-result', 'reveal');
+
+    // Always restore Pick button right away — never block the user
+    btn.classList.remove('deciding');
+    btn.disabled  = false;
+    btn.innerHTML = `<span class="btn-inner">🎲 Pick Again</span>`;
+    btn.onclick   = pickRandom;
+    isSpinning    = false;
+
+    // Save history
+    history.unshift({ name: pick.name, type, date: new Date().toISOString() });
+    if (history.length > 50) history.pop();
+    save(HISTORY_KEY, history);
+    renderHistory();
+
+    // Show contextual actions (watched/remove) after animation settles
+    setTimeout(() => showPostPickUI(pick, type, actions), 700);
+  }
+
+  /* ══════════════════════
+     WATCHED / PREF LOGIC
+  ══════════════════════ */
+  const PREF_KEY = "wtw_remove_pref";
+
+  function getPref() {
+    try { return localStorage.getItem(PREF_KEY); } catch { return null; }
+  }
+
+  function setPref(pref) {
+    try { localStorage.setItem(PREF_KEY, pref); } catch {}
+  }
+
+  function removeFromList(name, type) {
+    if (type === 'movie') { movies = movies.filter(m => m.name !== name); save(MOVIES_KEY, movies); }
+    else                  { series = series.filter(s => s.name !== name); save(SERIES_KEY, series); }
+    updatePickBtn();
+  }
+
+  function showPostPickUI(pick, type, actions) {
+    const pref = getPref();
+
+    if (pref === 'auto') {
+      // Auto-remove silently, show a small confirmation toast
+      removeFromList(pick.name, type);
+      actions.innerHTML = `
+        <div class="removed-toast">
+          <span class="toast-check">✓</span>
+          <span>"${esc(pick.name)}" removed from your list</span>
+        </div>
+      `;
+      actions.classList.add('show');
+    }
+    // manual: do nothing — user handles their library themselves
+    // null: do nothing — Pick Again will prompt for pref on next click
+  }
+
+  /* ══════════════════════
+     HISTORY
+  ══════════════════════ */
+  function renderHistory() {
+    const section = document.getElementById('historySection');
+    const list    = document.getElementById('historyList');
+
+    if (!history.length) {
+      section.style.display = 'none';
+      list.innerHTML = '';
+      return;
+    }
+
+    section.style.display = '';
+    list.innerHTML = history.map((h, i) => `
+      <div class="history-item">
+        <span class="history-num">${i + 1}</span>
+        <span class="history-name">${esc(h.name)}</span>
+        <span class="history-badge ${h.type}">${h.type === 'movie' ? 'Movie' : 'Series'}</span>
+        <span class="history-date">${fmtDate(h.date)}</span>
+      </div>
+    `).join('');
+  }
+
+  function clearHistory() { history = []; save(HISTORY_KEY, history); renderHistory(); }
+
+  function fmtDate(iso) {
+    const d = new Date(iso), now = new Date();
+    const mins = Math.floor((now - d) / 60000);
+    if (mins < 1)  return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)  return `${hrs}h ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric',
+      year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+  }
+
+  /* ══════════════════════
+     LIBRARY MODAL
+  ══════════════════════ */
+  let activeTab = 'movie';
+
+  function switchTab(type) {
+    activeTab = type;
+    document.getElementById('tabMovies').classList.toggle('active', type === 'movie');
+    document.getElementById('tabSeries').classList.toggle('active', type === 'series');
+    renderLibList();
+  }
+
+  function renderLibrary() {
+    document.getElementById('movieCount').textContent  = movies.length;
+    document.getElementById('seriesCount').textContent = series.length;
+    renderLibList();
+  }
+
+  function renderLibList() {
+    const list = document.getElementById('libList');
+    const src  = activeTab === 'movie' ? movies : series;
+
+    if (!src.length) {
+      list.innerHTML = `<p class="lib-empty">No ${activeTab === 'movie' ? 'movies' : 'TV series'} yet.</p>`;
+      return;
+    }
+
+    list.innerHTML = src.map((item, i) => `
+      <div class="lib-item">
+        <span class="lib-name">${esc(item.name)}</span>
+        <button class="lib-remove" onclick="removeItem('${activeTab}', ${i})" title="Remove">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function removeItem(type, i) {
+    if (type === 'movie') { movies.splice(i, 1); save(MOVIES_KEY, movies); }
+    else                  { series.splice(i, 1); save(SERIES_KEY, series); }
+    renderLibrary();
+    updatePickBtn();
+  }
+
+  /* ══════════════════════
+     ADD MODAL
+  ══════════════════════ */
+  let addType = 'movie';
+
+  function setAddType(type) {
+    addType = type;
+    document.getElementById('toggleMovie').classList.toggle('active', type === 'movie');
+    document.getElementById('toggleSeries').classList.toggle('active', type === 'series');
+    document.getElementById('titleInput').focus();
+  }
+
+  function submitAdd() {
+    const input = document.getElementById('titleInput');
+    const name  = input.value.trim();
+    if (!name) { input.focus(); return; }
+
+    if (addType === 'movie') { movies.push({ name }); save(MOVIES_KEY, movies); }
+    else                     { series.push({ name }); save(SERIES_KEY, series); }
+
+    renderLibrary();
+    updatePickBtn();
+    input.value = '';
+    input.focus();
+
+    const btn = document.getElementById('addSubmitBtn');
+    btn.textContent = '✓ Added!';
+    setTimeout(() => btn.textContent = 'Add to Library', 1300);
+  }
+
+  function updatePickBtn() {
+    document.getElementById('pickBtn').disabled = !movies.length && !series.length;
+  }
+
+  /* ══════════════════════
+     MODALS
+  ══════════════════════ */
+  function openModal(which) {
+    if (which === 'library') {
+      renderLibrary();
+      document.getElementById('libraryModal').classList.add('open');
+    } else if (which === 'prefs') {
+      renderPrefsModal();
+      document.getElementById('prefsModal').classList.add('open');
+    } else {
+      document.getElementById('addModal').classList.add('open');
+      setTimeout(() => document.getElementById('titleInput').focus(), 300);
+    }
+  }
+
+  function renderPrefsModal() {
+    const pref  = getPref();
+    const label = document.getElementById('prefCurrentLabel');
+    const autoBtn   = document.getElementById('prefAutoBtn');
+    const manualBtn = document.getElementById('prefManualBtn');
+    if (pref === 'auto') {
+      label.textContent = 'Current: auto-remove after each pick';
+      autoBtn.style.borderColor   = 'rgba(124,77,255,0.6)';
+      autoBtn.style.background    = 'rgba(124,77,255,0.12)';
+      autoBtn.style.color         = '#c4b5ff';
+      manualBtn.style.borderColor = '';
+      manualBtn.style.background  = '';
+      manualBtn.style.color       = '';
+    } else if (pref === 'manual') {
+      label.textContent = "Current: I'll manage my library manually";
+      manualBtn.style.borderColor = 'rgba(224,64,251,0.6)';
+      manualBtn.style.background  = 'rgba(224,64,251,0.12)';
+      manualBtn.style.color       = '#f5b0ff';
+      autoBtn.style.borderColor   = '';
+      autoBtn.style.background    = '';
+      autoBtn.style.color         = '';
+    } else {
+      label.textContent = 'Not set yet — will ask after your first pick.';
+      autoBtn.style.borderColor = manualBtn.style.borderColor = '';
+      autoBtn.style.background  = manualBtn.style.background  = '';
+      autoBtn.style.color       = manualBtn.style.color       = '';
+    }
+  }
+
+  function savePrefFromModal(pref) {
+    setPref(pref);
+    renderPrefsModal();
+    // brief feedback then close
+    const label = document.getElementById('prefCurrentLabel');
+    label.style.color = '#9d6fff';
+    label.textContent = '✓ Saved!';
+    setTimeout(() => { renderPrefsModal(); label.style.color = ''; }, 1000);
+  }
+
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  function backdropClose(e, id) {
+    if (e.target === document.getElementById(id)) closeModal(id);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal('libraryModal'); closeModal('addModal'); closeModal('prefsModal'); }
+  });
+
+  /* ══════════════════════
+     UTILS
+  ══════════════════════ */
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ══════════════════════
+     BACKGROUND ORBS
+  ══════════════════════ */
+  (function() {
+    const canvas = document.getElementById('bg-canvas');
+    const ctx    = canvas.getContext('2d');
+    let W, H;
+    const orbs = [
+      { x:0.2, y:0.3,  r:0.35, hue:260, speed:0.00018, phase:0   },
+      { x:0.8, y:0.6,  r:0.30, hue:300, speed:0.00022, phase:2.1 },
+      { x:0.5, y:0.85, r:0.25, hue:220, speed:0.00015, phase:4.2 },
+    ];
+    function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+    function draw(t) {
+      ctx.clearRect(0, 0, W, H);
+      orbs.forEach(o => {
+        const x = (o.x + Math.sin(t * o.speed + o.phase) * 0.06) * W;
+        const y = (o.y + Math.cos(t * o.speed * 0.7 + o.phase) * 0.05) * H;
+        const r = o.r * Math.min(W, H);
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0,   `hsla(${o.hue},90%,55%,0.12)`);
+        g.addColorStop(0.5, `hsla(${o.hue},80%,45%,0.05)`);
+        g.addColorStop(1,   `hsla(${o.hue},70%,40%,0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      });
+      requestAnimationFrame(draw);
+    }
+    window.addEventListener('resize', resize);
+    resize(); requestAnimationFrame(draw);
+  })();
+
+  /* ══════════════════════
+     WELCOME MODAL
+  ══════════════════════ */
+  const SEEN_KEY = "wtw_seen";
+
+  function dismissWelcome() {
+    try { localStorage.setItem(SEEN_KEY, '1'); } catch {}
+    closeModal('welcomeModal');
+  }
+
+  /* ══════════════════════
+     INIT
+  ══════════════════════ */
+  updatePickBtn();
+  renderHistory();
+
+  // Show welcome only on first visit
+  const hasSeenWelcome = (() => { try { return !!localStorage.getItem(SEEN_KEY); } catch { return false; } })();
+  if (!hasSeenWelcome) {
+    setTimeout(() => document.getElementById('welcomeModal').classList.add('open'), 400);
+  }
+</script>
+</body>
+</html>
