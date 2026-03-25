@@ -9,6 +9,7 @@ A minimal, browser-based app that randomly picks a movie or TV series from your 
 - **Split lists** — separate libraries for Movies and TV Series
 - **Mood picker** — choose between a Movie or TV Series before each spin
 - **Slot machine animation** — titles cycle and slow down before landing on a pick
+- **Pre-loaded samples** — comes with curated sample movies and TV series; add your own or remove the defaults via the library
 - **Removal preferences** — auto-remove picked titles, or manage your library yourself
 - **Pick history** — timestamped log of everything fate has chosen for you
 - **No account needed** — everything lives in your browser's local storage
